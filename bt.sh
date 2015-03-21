@@ -1,5 +1,8 @@
 #!/bin/bash
 # Usage: . bt.sh; bt_init; [ bt_start "foo"; bt_end "foo"; ... ]; bt_cleanup
+# Simple performance tracing for bash.
+#
+#
 
 bt_sample_cpu_idle () {
   local sample_interval_s=1
@@ -21,8 +24,13 @@ bt_init () {
     export BT_INIT="$(basename ${BASH_SOURCE[1]}):${BASH_LINENO[0]}"
     rm -f /tmp/bt*
     date '+%s%N' > /tmp/bt.START
-    bash -c "bt_sample_cpu_idle" &
-    export BT_CPUSAMPLE_PID=$!
+
+    # only trace CPU if mpstat seems to be available
+    touch /tmp/bt.CPU
+    if type mpstat 2>/dev/null; then
+      bash -c "bt_sample_cpu_idle" &
+      export BT_CPUSAMPLE_PID=$!
+    fi
   fi
 }
 
@@ -31,8 +39,10 @@ bt_cleanup () {
   local caller="$(basename ${BASH_SOURCE[1]}):${BASH_LINENO[0]}"
   local caller_file="${caller%%:*}"
   if [ "$init_file" = "$caller_file" ]; then
-    kill $BT_CPUSAMPLE_PID
-    wait $BT_CPUSAMPLE_PID 2>/dev/null || true
+    if [ -n "$BT_CPUSAMPLE_PID" ]; then
+      kill $BT_CPUSAMPLE_PID
+      wait $BT_CPUSAMPLE_PID 2>/dev/null || true
+    fi
     date '+%s%N' > /tmp/bt.END
     if [ -z "$BT_DISABLED" -o "$BT_DISABLED" = "0" ]; then bt_report; fi
 
@@ -206,8 +216,10 @@ bt_report () {
 
   printf "Build Trace Start ($BT_INIT)\n\n"
 
-  bt_compute_cpu_sparkline
-  printf "%14s%s * CPU Utilization\n" " " "$bt_sparkline"
+  if type mpstat 2>/dev/null && type bc 2>/dev/null; then
+    bt_compute_cpu_sparkline
+    printf "%14s%s * CPU Utilization\n" " " "$bt_sparkline"
+  fi
 
   # measurements sorted chronologically by start time
   for m in $(ls -1 /tmp/bt.*.* | sort -t '.' -k3,3 -n); do

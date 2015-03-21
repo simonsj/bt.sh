@@ -8,8 +8,10 @@ bt_sample_cpu_idle () {
   local sample_interval_s=1
   local sample_count=1
   while [ 1 ]; do
+    # mpstat columns differ across versions: here assume last column is '%idle'
     mpstat -u -P ALL $sample_interval_s $sample_count |
-     tail -n +5 | awk '{print $12}' | tr '\n' ' ' | sed -e 's/  *$/\n/g' >> /tmp/bt.CPU
+      grep -e "^Average" | tail -n +3 | grep -o -e '[0-9\.]*$' |
+      tr '\n' ' ' | sed -e 's/  *$/\n/g' >> /tmp/bt.CPU
   done
 }
 export -f bt_sample_cpu_idle
@@ -27,7 +29,7 @@ bt_init () {
 
     # only trace CPU if mpstat seems to be available
     touch /tmp/bt.CPU
-    if type mpstat 2>/dev/null; then
+    if type mpstat >/dev/null 2>&1; then
       bash -c "bt_sample_cpu_idle" &
       export BT_CPUSAMPLE_PID=$!
     fi
@@ -216,7 +218,7 @@ bt_report () {
 
   printf "Build Trace Start ($BT_INIT)\n\n"
 
-  if type mpstat 2>/dev/null && type bc 2>/dev/null; then
+  if type mpstat 2>&1 >/dev/null && type bc 2>&1 >/dev/null; then
     bt_compute_cpu_sparkline
     printf "%14s%s * CPU Utilization\n" " " "$bt_sparkline"
   fi

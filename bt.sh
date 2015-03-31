@@ -23,22 +23,25 @@ export -f bt_sample_cpu_idle
 #
 bt_init () {
   if [ -z "$BT_INIT" ]; then
-    export BT_INIT="$(basename ${BASH_SOURCE[1]}):${BASH_LINENO[0]}"
+    export BT_INIT="$(basename ${BASH_SOURCE[1]} 2>/dev/null):${BASH_LINENO[0]}"
     rm -f /tmp/bt*
     date '+%s%N' > /tmp/bt.START
 
     # only trace CPU if mpstat seems to be available
     touch /tmp/bt.CPU
-    if type mpstat >/dev/null 2>&1; then
-      bash -c "bt_sample_cpu_idle" &
-      export BT_CPUSAMPLE_PID=$!
+    if [ -z "$BT_DISABLE_CPUSAMPLE" ]; then
+      # need both mpstat and bc for this to work
+      if type mpstat 2>&1 >/dev/null && type bc 2>&1 >/dev/null; then
+        bash -c "bt_sample_cpu_idle" &
+        export BT_CPUSAMPLE_PID=$!
+      fi
     fi
   fi
 }
 
 bt_cleanup () {
   local init_file="${BT_INIT%%:*}"
-  local caller="$(basename ${BASH_SOURCE[1]}):${BASH_LINENO[0]}"
+  local caller="$(basename ${BASH_SOURCE[1]} 2>/dev/null):${BASH_LINENO[0]}"
   local caller_file="${caller%%:*}"
   if [ "$init_file" = "$caller_file" ]; then
     if [ -n "$BT_CPUSAMPLE_PID" ]; then
@@ -218,7 +221,7 @@ bt_report () {
 
   printf "Build Trace Start ($BT_INIT)\n\n"
 
-  if type mpstat 2>&1 >/dev/null && type bc 2>&1 >/dev/null; then
+  if [ -n "$BT_CPUSAMPLE_PID" ]; then
     bt_compute_cpu_sparkline
     printf "%14s%s * CPU Utilization\n" " " "$bt_sparkline"
   fi
@@ -270,7 +273,7 @@ bt_report () {
     fi
 
     # omit small measurements by default
-    if [ -z "$BT_DEBUG" -a "$m_bar" = "." ]; then
+    if [ -z "$BT_SMALLSTATS" -a "$m_bar" = "." ]; then
       continue
     fi
 

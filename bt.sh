@@ -137,13 +137,16 @@ spark () {
     # round the number but that doesn't work on OS X (bash3) nor does
     # `awk '{printf "%.0f",$1}' <<< $n` work, so just cut it off
     n=${n%.*}
+    if [ -z "$n" ]; then n=0; fi
     (( n < min )) && min=$n
     (( n > max )) && max=$n
     numbers=$numbers${numbers:+ }$n
   done
 
   if [ -z "$min" ]; then
-    >&2 echo "warning: min became empty (numbers '$numbers')"
+    >&2 echo "warning: min became empty"
+    >&2 echo "warning: input   '$@'"
+    >&2 echo "warning: numbers '$numbers'"
     min=0
   fi
 

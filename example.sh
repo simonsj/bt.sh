@@ -18,9 +18,9 @@ bash -c 'bt_start "cat + gzip 1"; example_function; bt_end "cat + gzip 1"'
 bash -c 'bt_start "cat + gzip 2"; example_function; bt_end "cat + gzip 2"'
 bt_end 'serial cats'
 
-bt_start 'sleep 0.5'
-sleep 0.5
-bt_end 'sleep 0.5'
+bt_start 'sleep 1.0'
+sleep 1.0
+bt_end 'sleep 1.0'
 
 bt_start 'parallel cats'
 
@@ -34,9 +34,9 @@ wait $pcat_pids 2>/dev/null || true
 
 bt_end 'parallel cats'
 
-bt_start 'final sleep 0.5'
-sleep 0.5
-bt_end 'final sleep 0.5'
+bt_start 'final sleep 1.0'
+sleep 1.0
+bt_end 'final sleep 1.0'
 
 bt_end 'full example'
 

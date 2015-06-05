@@ -1,8 +1,6 @@
 #!/bin/bash
 # Usage: . bt.sh; bt_init; [ bt_start "foo"; bt_end "foo"; ... ]; bt_cleanup
-# Simple performance tracing for bash.
-#
-#
+# Simple timechart-like tracing for bash.
 
 bt_sample_cpu_idle () {
   local sample_interval_s=1

@@ -29,7 +29,7 @@ bt_init () {
     touch /tmp/bt.CPU
     if [ -z "$BT_DISABLE_CPUSAMPLE" ]; then
       # need both mpstat and bc for this to work
-      if type mpstat 2>&1 >/dev/null && type bc 2>&1 >/dev/null; then
+      if type mpstat >/dev/null 2>&1 && type bc >/dev/null 2>&1; then
         bash -c "bt_sample_cpu_idle" &
         export BT_CPUSAMPLE_PID=$!
       fi

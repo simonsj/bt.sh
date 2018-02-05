@@ -286,11 +286,11 @@ bt_report () {
 
     printf "[ %8ss ] %s%s%s%s%s * %s\n" \
      "$m_time_s_fmt" \
-     "$(yes ' ' | head -n $m_start_col | tr -d '\n')" \
+     "$(yes ' ' 2> /dev/null | head -n $m_start_col | tr -d '\n')" \
      "$m_bar_start" \
-     "$(yes "$m_bar" | head -n $m_num_middle_units | tr -d '\n')" \
+     "$(yes "$m_bar" 2> /dev/null | head -n $m_num_middle_units | tr -d '\n')" \
      "$m_bar_end" \
-     "$(yes ' ' | head -n $m_num_end_units | tr -d '\n')" \
+     "$(yes ' ' 2> /dev/null | head -n $m_num_end_units | tr -d '\n')" \
      "$m_desc"
   done
 

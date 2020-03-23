@@ -9,7 +9,7 @@ bt_sample_cpu_idle () {
     # mpstat columns differ across versions: here assume last column is '%idle'
     mpstat -u -P ALL $sample_interval_s $sample_count |
       grep -e "^Average" | tail -n +3 | grep -o -e '[0-9\.]*$' |
-      tr '\n' ' ' | sed -e 's/  *$/\n/g' >> /tmp/bt.CPU
+      tr '\n' ' ' | sed -e 's/  *$/\n/g' >> "$BT_DIR/CPU"
   done
 }
 export -f bt_sample_cpu_idle
@@ -22,11 +22,11 @@ export -f bt_sample_cpu_idle
 bt_init () {
   if [ -z "$BT_INIT" ]; then
     export BT_INIT="$(basename ${BASH_SOURCE[1]} 2>/dev/null):${BASH_LINENO[0]}"
-    rm -f /tmp/bt*
-    date '+%s%N' > /tmp/bt.START
+    export BT_DIR="$(mktemp -d /tmp/bt-$$-XXXXXXX)"
+    date '+%s%N' > "$BT_DIR/START"
 
     # only trace CPU if mpstat seems to be available
-    touch /tmp/bt.CPU
+    touch "$BT_DIR/CPU"
     if [ -z "$BT_DISABLE_CPUSAMPLE" ]; then
       # need both mpstat and bc for this to work
       if type mpstat >/dev/null 2>&1 && type bc >/dev/null 2>&1; then
@@ -46,11 +46,15 @@ bt_cleanup () {
       kill $BT_CPUSAMPLE_PID
       wait $BT_CPUSAMPLE_PID 2>/dev/null || true
     fi
-    date '+%s%N' > /tmp/bt.END
+    date '+%s%N' > "$BT_DIR/END"
     if [ -z "$BT_DISABLED" -o "$BT_DISABLED" = "0" ]; then bt_report; fi
 
     # clean up in the usual case, but make it easy to debug saved stats
-    if [ -z "$BT_DEBUG" ]; then rm -f /tmp/bt* 2>/dev/null; fi
+    if [ -z "$BT_DEBUG" ]; then
+      rm -rf "$BT_DIR" 2>/dev/null
+      # Clean up temporary directories at least one day old, also.
+      find "$(dirname "$BT_DIR")" -maxdepth 1 -mtime +0 -type d -name 'bt-*' -print0 | xargs -0 rm -rf
+    fi
     export BT_INIT=""
   fi
 }
@@ -71,8 +75,8 @@ bt_enable () {
 #
 # bt_start "description for a part of the build"
 #
-# Creates "/tmp/bt.<description checksum>.<start timestamp>" and a symlink to
-# it named "/tmp/bt.<description checksum>".  The former enables easily sorting
+# Creates "$BT_DIR/<description checksum>.<start timestamp>" and a symlink to
+# it named "$BT_DIR/<description checksum>".  The former enables easily sorting
 # results by start time, and the latter enables easily recording the end time
 # for a given measurement.
 #
@@ -83,8 +87,8 @@ bt_start () {
     local caller="$(basename ${BASH_SOURCE[1]} 2>/dev/null):${BASH_LINENO[0]}"
     local desc_checksum=$(echo "$@" | cksum | awk '{print $1}')
     local timestamp=$(date '+%s%N')
-    echo "$caller $@" > /tmp/bt.$desc_checksum.$timestamp
-    ln -s /tmp/bt.$desc_checksum.$timestamp /tmp/bt.$desc_checksum || {
+    echo "$caller $@" > "$BT_DIR/$desc_checksum.$timestamp"
+    ln -s "$BT_DIR/$desc_checksum.$timestamp" "$BT_DIR/$desc_checksum" || {
       echo "FAIL: entry already exists for '$@' ($desc_checksum)"
       exit 1
     }
@@ -101,7 +105,7 @@ bt_end () {
   if [ -z "$BT_DISABLED" -o "$BT_DISABLED" = "0" ]; then
     local caller="$(basename ${BASH_SOURCE[1]} 2>/dev/null):${BASH_LINENO[0]}"
     local desc_checksum=$(echo "$@" | cksum | awk '{print $1}')
-    echo "$(date '+%s%N') $caller $1" >> /tmp/bt.$desc_checksum
+    echo "$(date '+%s%N') $caller $1" >> "$BT_DIR/$desc_checksum"
   fi
 }
 export -f bt_end
@@ -168,21 +172,21 @@ bt_compute_cpu_sparkline () {
   # CPU usage sparkline
   local base_path="$(cd $(dirname ${BASH_SOURCE[0]}) && pwd)"
   local num_procs=$(cat /proc/cpuinfo | grep -c -e "processor")
-  local samples_per_column=$(($(wc -l /tmp/bt.CPU | cut -f1 -d' ') / $width))
+  local samples_per_column=$(($(wc -l "$BT_DIR/CPU" | cut -f1 -d' ') / $width))
   local nonidle_values=""
   if [ "$samples_per_column" -gt 0 ]; then
     for n in $(seq $width); do
-      local samples=$(tail -n +$(($n * $samples_per_column)) /tmp/bt.CPU | head -n $samples_per_column)
+      local samples=$(tail -n +$(($n * $samples_per_column)) "$BT_DIR/CPU" | head -n $samples_per_column)
       local sum=$(echo "$samples" | tr ' ' '\n' | awk '{s+=$1} END {print s}')
       local avg=$(echo "$sum / $samples_per_column" | bc -l)
       local value=$(echo "($num_procs * 100.0) - $avg" | bc -l)
       nonidle_values="$nonidle_values $value"
     done
   else
-    num_samples=$(wc -l /tmp/bt.CPU | cut -f1 -d' ')
+    num_samples=$(wc -l "$BT_DIR/CPU" | cut -f1 -d' ')
     for c in $(seq $width); do
       local n=$((($c * $num_samples) / $width))
-      local sample=$(tail -n +$n  /tmp/bt.CPU | head -n 1)
+      local sample=$(tail -n +$n "$BT_DIR/CPU" | head -n 1)
       local sum=$(echo "$sample" | tr ' ' '\n' | awk '{s+=$1} END {print s}')
       local avg=$(echo "$sum / $num_procs" | bc -l)
       local value=$(echo "($num_procs * 100.0) - $avg" | bc -l)
@@ -206,8 +210,8 @@ bt_report () {
     set -x
   fi
 
-  local total_start_ms=$(($(cat /tmp/bt.START) / 1000000))
-  local total_end_ms=$(($(cat /tmp/bt.END) / 1000000))
+  local total_start_ms=$(($(cat "$BT_DIR/START") / 1000000))
+  local total_end_ms=$(($(cat "$BT_DIR/END") / 1000000))
   local total_time_ms=$(($total_end_ms - $total_start_ms))
   local total_time_s=$(($total_time_ms / 1000))
   local total_time_s_remainder=$(($total_time_ms % 1000))
@@ -228,7 +232,7 @@ bt_report () {
   fi
 
   # measurements sorted chronologically by start time
-  for m in $(ls -1 /tmp/bt.*.* | sort -t '.' -k3,3 -n); do
+  for m in $(ls -1 "$BT_DIR"/*.* | sort -t '.' -k3,3 -n); do
     local m_failed=0
     local m_desc=$(head -n1 $m | cut -d ' ' -f 2-)
     local m_start_ms=$((${m##*.} / 1000000))

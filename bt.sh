@@ -232,7 +232,7 @@ bt_report () {
   fi
 
   # measurements sorted chronologically by start time
-  for m in $(ls -1 "$BT_DIR"/*.* | sort -t '.' -k3,3 -n); do
+  for m in $(ls -1 "$BT_DIR"/*.* | sort -t '.' -k2,2 -n); do
     local m_failed=0
     local m_desc=$(head -n1 $m | cut -d ' ' -f 2-)
     local m_start_ms=$((${m##*.} / 1000000))

@@ -12,7 +12,7 @@ module BT
       file_alias = "/tmp/bt.#{desc_checksum}"
 
       File.write(file, "#{caller} #{name}\n")
-      File.symlink(file, file_alias)
+      File.symlink(file, file_alias) unless File.symlink?(file_alias)
     end
 
     def end(name)

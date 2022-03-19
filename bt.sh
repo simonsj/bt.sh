@@ -23,7 +23,9 @@ bt_init () {
   if [ -z "$BT_INIT" ]; then
     export BT_INIT="$(basename ${BASH_SOURCE[1]} 2>/dev/null):${BASH_LINENO[0]}"
     export BT_DIR="$(mktemp -d /tmp/bt-$$-XXXXXXX)"
-    date '+%s%N' > "$BT_DIR/START"
+    export BT_DATE="${BT_DATE:-date}"
+    export BT_HEAD="${BT_HEAD:-head}"
+    $BT_DATE '+%s%N' > "$BT_DIR/START"
 
     # only trace CPU if mpstat seems to be available
     touch "$BT_DIR/CPU"
@@ -46,7 +48,7 @@ bt_cleanup () {
       kill $BT_CPUSAMPLE_PID
       wait $BT_CPUSAMPLE_PID 2>/dev/null || true
     fi
-    date '+%s%N' > "$BT_DIR/END"
+    $BT_DATE '+%s%N' > "$BT_DIR/END"
     if [ -z "$BT_DISABLED" -o "$BT_DISABLED" = "0" ]; then bt_report; fi
 
     # clean up in the usual case, but make it easy to debug saved stats
@@ -86,7 +88,7 @@ bt_start () {
   if [ -z "$BT_DISABLED" -o "$BT_DISABLED" = "0" ]; then
     local caller="$(basename ${BASH_SOURCE[1]} 2>/dev/null):${BASH_LINENO[0]}"
     local desc_checksum=$(echo "$@" | cksum | awk '{print $1}')
-    local timestamp=$(date '+%s%N')
+    local timestamp=$($BT_DATE '+%s%N')
     echo "$caller $@" > "$BT_DIR/$desc_checksum.$timestamp"
     ln -s "$BT_DIR/$desc_checksum.$timestamp" "$BT_DIR/$desc_checksum" || {
       echo "FAIL: entry already exists for '$@' ($desc_checksum)"
@@ -105,7 +107,7 @@ bt_end () {
   if [ -z "$BT_DISABLED" -o "$BT_DISABLED" = "0" ]; then
     local caller="$(basename ${BASH_SOURCE[1]} 2>/dev/null):${BASH_LINENO[0]}"
     local desc_checksum=$(echo "$@" | cksum | awk '{print $1}')
-    echo "$(date '+%s%N') $caller $1" >> "$BT_DIR/$desc_checksum"
+    echo "$($BT_DATE '+%s%N') $caller $1" >> "$BT_DIR/$desc_checksum"
   fi
 }
 export -f bt_end
@@ -176,7 +178,7 @@ bt_compute_cpu_sparkline () {
   local nonidle_values=""
   if [ "$samples_per_column" -gt 0 ]; then
     for n in $(seq $width); do
-      local samples=$(tail -n +$(($n * $samples_per_column)) "$BT_DIR/CPU" | head -n $samples_per_column)
+      local samples=$(tail -n +$(($n * $samples_per_column)) "$BT_DIR/CPU" | $BT_HEAD -n $samples_per_column)
       local sum=$(echo "$samples" | tr ' ' '\n' | awk '{s+=$1} END {print s}')
       local avg=$(echo "$sum / $samples_per_column" | bc -l)
       local value=$(echo "($num_procs * 100.0) - $avg" | bc -l)
@@ -186,7 +188,7 @@ bt_compute_cpu_sparkline () {
     num_samples=$(wc -l "$BT_DIR/CPU" | cut -f1 -d' ')
     for c in $(seq $width); do
       local n=$((($c * $num_samples) / $width))
-      local sample=$(tail -n +$n "$BT_DIR/CPU" | head -n 1)
+      local sample=$(tail -n +$n "$BT_DIR/CPU" | $BT_HEAD -n 1)
       local sum=$(echo "$sample" | tr ' ' '\n' | awk '{s+=$1} END {print s}')
       local avg=$(echo "$sum / $num_procs" | bc -l)
       local value=$(echo "($num_procs * 100.0) - $avg" | bc -l)
@@ -234,7 +236,7 @@ bt_report () {
   # measurements sorted chronologically by start time
   for m in $(ls -1 "$BT_DIR"/*.* | sort -t '.' -k2,2 -n); do
     local m_failed=0
-    local m_desc=$(head -n1 $m | cut -d ' ' -f 2-)
+    local m_desc=$($BT_HEAD -n1 $m | cut -d ' ' -f 2-)
     local m_start_ms=$((${m##*.} / 1000000))
     local m_end_ms="$total_end_ms"
     if [ -s "$m" -a $(wc -l $m | awk '{print $1}') -eq 2 ]; then
@@ -290,11 +292,11 @@ bt_report () {
 
     printf "[ %8ss ] %s%s%s%s%s * %s\n" \
      "$m_time_s_fmt" \
-     "$(yes ' ' 2> /dev/null | head -n $m_start_col | tr -d '\n')" \
+     "$(yes ' ' 2> /dev/null | $BT_HEAD -n $m_start_col | tr -d '\n')" \
      "$m_bar_start" \
-     "$(yes "$m_bar" 2> /dev/null | head -n $m_num_middle_units | tr -d '\n')" \
+     "$(yes "$m_bar" 2> /dev/null | $BT_HEAD -n $m_num_middle_units | tr -d '\n')" \
      "$m_bar_end" \
-     "$(yes ' ' 2> /dev/null | head -n $m_num_end_units | tr -d '\n')" \
+     "$(yes ' ' 2> /dev/null | $BT_HEAD -n $m_num_end_units | tr -d '\n')" \
      "$m_desc"
   done
 

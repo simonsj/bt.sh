@@ -44,13 +44,12 @@ Explicit goals:
  * identify phases which are CPU-bound (and not)
 
 Non-goals:
- * no claims to function on OSX out of the box
  * not suitable for fine-grained perf measurement
    * if `date` overhead would matter in your context, `bt.sh` is not a good fit
 
 ## Usage
 
-See [example.sh](https://github.com/simonsj/bt.sh/blob/master/example.sh) for an example script.
+See [example.sh](https://github.com/simonsj/bt.sh/blob/main/example.sh) for an example script.
 
 In a nutshell:
 ```sh
@@ -67,10 +66,10 @@ bt_cleanup                         # cleanup once when done
 
 The `bt_init` and `bt_cleanup` are okay to be invoked in a nested fashion from multiple scripts: a report will be emitted when the first script to have done `bt_init` finally reaches its `bt_cleanup`.
 
-The `bt_start` and `bt_end` invocations for a given measurement each require their string description argument to match, and to be globally unique.  The description name is used to key into the measurement database: simple files placed into /tmp.  Files for each measurement are organized as:
+The `bt_start` and `bt_end` invocations for a given measurement each require their string description argument to match, and to be globally unique.  The description name is used to key into the measurement database: simple files placed into a `mktemp`'d directory under /tmp, `$BT_DIR`.  Files for each measurement are organized as:
 ```
-  actual file:  /tmp/bt.<description checksum>.<start timestamp>
-  symlink:      /tmp/bt.<description checksum> --> actual file
+  actual file:  $BT_DIR/<description checksum>.<start timestamp>
+  symlink:      $BT_DIR/<description checksum> --> actual file
 ```
 With this scheme, lookup for `bt_end` is constant-time via the symlink, and the stats can be sorted by chronological start time using the actual files' names.
 
@@ -81,21 +80,22 @@ Upon `bt_end`, the final line of the data file looks like:
 Where above, the first two columns are stable, and everything from the third word to the end of line is the string description.
 
 ### Assumptions
- * today an assumption is `bt.sh` will only ever be used by any single build at a time: it assumes sole control over the `/tmp/bt.*` namespace of files
  * some bash-isms are relied upon: `export -f`, `BASH_SOURCE`, `BASH_LINENO`
 
 ## Dependencies
 
-`bt.sh` is expected to work without much effort on a modern Linux.
+`bt.sh` is expected to work without much effort on a modern Linux or MacOS.
 
 It depends on these utilities:
 
  * bash
- * date, yes, seq, cksum (GNU coreutils)
+ * date, yes, seq, cksum, head, mktemp (GNU coreutils)
  * mpstat (sysstat package)
  * GNU bc (math package)
- * POSIX: awk, tail, sed, basename, head
+ * POSIX: awk, tail, sed, basename
+
+On MacOS with Homebrew-installed GNU coreutils, you can specify `BT_HEAD=ghead` and `BT_DATE=gdate` to ensure that those versions of `head` and `date` are used.
 
 ## License
 
-See the [LICENSE](https://github.com/simonsj/bt.sh/blob/master/LICENSE.md) file for license rights and limitations (MIT).
+See the [LICENSE](https://github.com/simonsj/bt.sh/blob/main/LICENSE.md) file for license rights and limitations (MIT).

@@ -8,8 +8,8 @@ module BT
       return if ENV.key?("BT_DISABLED") and ENV["BT_DISABLED"] != "0"
       caller, desc_checksum, timestamp = _metadata(name)
 
-      file = "/tmp/bt.#{desc_checksum}.#{timestamp}"
-      file_alias = "/tmp/bt.#{desc_checksum}"
+      file = "#{ENV["BT_DIR"]}/#{desc_checksum}.#{timestamp}"
+      file_alias = "#{ENV["BT_DIR"]}/#{desc_checksum}"
 
       File.write(file, "#{caller} #{name}\n")
       File.symlink(file, file_alias)
@@ -19,7 +19,7 @@ module BT
       return if ENV.key?("BT_DISABLED") and ENV["BT_DISABLED"] != "0"
       caller, desc_checksum, timestamp = _metadata(name)
 
-      File.open("/tmp/bt.#{desc_checksum}", 'a') do |f|
+      File.open("#{ENV["BT_DIR"]}/#{desc_checksum}", 'a') do |f|
         f.puts("#{timestamp} #{caller} #{name}")
       end
     end
